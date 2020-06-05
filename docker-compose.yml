@@ -1,0 +1,83 @@
+version: '3'
+
+services:
+  db:
+    image: mariadb
+    command: --transaction-isolation=READ-COMMITTED --binlog-format=ROW
+    restart: always
+    volumes:
+      - db:/var/lib/mysql
+    environment:
+      - MYSQL_ROOT_PASSWORD=hogehogerootpass
+    env_file:
+      - db.env
+
+  app:
+    build: ./nextcloud
+    restart: always
+    volumes:
+      - nextcloud:/var/www/html
+    environment:
+      - MYSQL_HOST=db
+      - REDIS_HOST=redis
+    env_file:
+      - db.env
+    depends_on:
+      - redis
+      - db
+
+  autossl:
+    image: xenolf/lego
+    environment:
+      - MYDNSJP_MASTER_ID=hoge
+      - MYDNSJP_PASSWORD=hogehoge
+    command: >
+      --path /lego
+      --dns mydnsjp
+      --email admin@hogehoge.hoge.jp
+      --domains "*.hogehoge.hoge.jp"
+      --domains "hogehoge.hoge.jp"
+      --accept-tos
+      run
+    volumes:
+      - certs:/lego/certificates
+    networks:
+      - proxy-tier
+
+  web:
+    build: ./web
+    restart: always
+    ports:
+      - 80:80
+      - 443:443
+    volumes:
+      - certs:/etc/nginx/certs:ro
+      - nextcloud:/var/www/html:ro
+      - /home/hoge/nextcloud/log/nginx:/var/log/nginx
+      - /home/hoge/nextcloud/web/nginx.conf:/etc/nginx/nginx.conf
+      - /home/hoge/nextcloud/conf.d:/etc/nginx/conf.d
+    environment:
+      - VIRTUAL_HOST=nextcloud.hogehoge.hoge.jp
+    depends_on:
+      - app
+    networks:
+      - proxy-tier
+      - default
+      - autossl
+
+  redis:
+      image: webhippie/redis:latest
+      restart: always
+      environment:
+        - REDIS_DATABASES=1
+      volumes:
+        - redis:/var/lib/redis
+
+volumes:
+  db:
+  nextcloud:
+  certs:
+  html:
+
+networks:
+  proxy-tier:
